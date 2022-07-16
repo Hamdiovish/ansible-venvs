@@ -1,6 +1,8 @@
 ---
-  - name: Run simple hello world
-    hosts: "localhost"
+  - name: Run Python virtual environment provisioner
+    hosts: 
+      - "ansible-sandbox"
+      - "localhost"
     become: true
     vars:
       workspace: "/opt/python_venvs"
@@ -15,6 +17,7 @@
       - name: Install virtualenv
         package: 
           name: python3-venv
+
 
       # Prepare environment
       - name: Copy required data
@@ -37,12 +40,26 @@
           mode: '0755'
           recurse: yes
 
+
       # Handling venvs logic
-      - name: Creating Virtual Environments 
+      - name: Fetch existing venv
+        find:
+          paths: "{{ workspace }}"
+          recurse: no
+          file_type: directory
+        register: reg_existing_venv
+
+      - name: Extract existing venv names to use for venv existance check
+        set_fact:
+          reg_existing_venv_names: "{{ reg_existing_venv_names | default([]) + [item.path | basename | split('.') | first] }}"
+        with_items: "{{ reg_existing_venv.files | default([]) }}"
+
+      - name: Creating Virtual Environments if not exist
         shell: "python3 -m venv {{ workspace }}/{{ item.path | basename | split('.') | first }}"  
         with_items: "{{ reg_requirement_files.files }}"
+        when: "item.path|basename|split('.')|first not in reg_existing_venv_names| default([])"
 
-      - name: Activating Virtual Environments 
+      - name: Activating Virtual Environments if not exist
         shell: |
           source ./bin/activate
           pip install -r /{{ backstage }}/envs/{{ item.path | basename | split('.') | first }}.txt
@@ -50,3 +67,4 @@
            executable: /bin/bash
            chdir: "{{ workspace }}/{{ item.path | basename | split('.') | first}}"
         with_items: "{{ reg_requirement_files.files }}"
+        when: "item.path|basename|split('.')|first not in reg_existing_venv_names| default([])"
