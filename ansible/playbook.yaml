@@ -1,0 +1,52 @@
+---
+  - name: Run simple hello world
+    hosts: "localhost"
+    become: true
+    vars:
+      workspace: "/opt/python_venvs"
+      backstage: "/tmp"
+
+    tasks:
+      # Install dependencies
+      - name: Install pip
+        package:
+          name: 'python3-pip'
+
+      - name: Install virtualenv
+        package: 
+          name: python3-venv
+
+      # Prepare environment
+      - name: Copy required data
+        copy:
+          src: ../src/envs
+          dest: "{{ backstage }}"
+
+      - name: Find txt files
+        find:
+          paths: "/{{ backstage }}/envs"
+          patterns: "*.txt"
+        register: reg_requirement_files
+
+
+      # Prepare output folder
+      - name: Create a new directory www at given path recursively
+        file:
+          path: "{{ workspace }}"
+          state: directory
+          mode: '0755'
+          recurse: yes
+
+      # Handling venvs logic
+      - name: Creating Virtual Environments 
+        shell: "python3 -m venv {{ workspace }}/{{ item.path | basename | split('.') | first }}"  
+        with_items: "{{ reg_requirement_files.files }}"
+
+      - name: Activating Virtual Environments 
+        shell: |
+          source ./bin/activate
+          pip install -r /{{ backstage }}/envs/{{ item.path | basename | split('.') | first }}.txt
+        args:
+           executable: /bin/bash
+           chdir: "{{ workspace }}/{{ item.path | basename | split('.') | first}}"
+        with_items: "{{ reg_requirement_files.files }}"
